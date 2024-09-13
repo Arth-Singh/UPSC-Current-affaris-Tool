@@ -1,7 +1,6 @@
 import streamlit as st
 
-try:
-    import torch
+import torch
     from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
 except ImportError:
     st.error("Failed to import torch or transformers. Please check your installation.")
