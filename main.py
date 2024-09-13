@@ -20,6 +20,7 @@ from textblob import TextBlob
 import matplotlib.pyplot as plt
 import PyPDF2
 import io
+
 # Initialize UPSC topics with subtopics
 UPSC_TOPICS = {
     "Polity and Governance": ["Constitution", "Parliament", "Judiciary", "Local Government"],
