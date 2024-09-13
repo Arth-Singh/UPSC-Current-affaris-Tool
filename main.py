@@ -1,23 +1,26 @@
 import streamlit as st
-import torch
-from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
+
+try:
+    import torch
+    from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
+except ImportError:
+    st.error("Failed to import torch or transformers. Please check your installation.")
+    st.stop()
+
 import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
 import plotly.express as px
-import random
 import asyncio
 import aiohttp
 from bs4 import BeautifulSoup
 from sklearn.feature_extraction.text import TfidfVectorizer
 from sklearn.metrics.pairwise import cosine_similarity
 import hashlib
-import numpy as np
 from textblob import TextBlob
 import matplotlib.pyplot as plt
 import PyPDF2
 import io
-
 # Initialize UPSC topics with subtopics
 UPSC_TOPICS = {
     "Polity and Governance": ["Constitution", "Parliament", "Judiciary", "Local Government"],
