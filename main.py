@@ -64,11 +64,11 @@ def load_models():
     device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 
     classifier_name = "distilbert-base-uncased-finetuned-sst-2-english"
-    classifier_tokenizer = AutoTokenizer.from_pretrained(classifier_name, clean_up_tokenization_spaces=True)
+    classifier_tokenizer = AutoTokenizer.from_pretrained(classifier_name)
     classifier_model = AutoModelForSequenceClassification.from_pretrained(classifier_name).to(device)
 
     summarizer_name = "facebook/bart-large-cnn"
-    summarizer_tokenizer = AutoTokenizer.from_pretrained(summarizer_name, clean_up_tokenization_spaces=True)
+    summarizer_tokenizer = AutoTokenizer.from_pretrained(summarizer_name)
     summarizer_model = AutoModelForSeq2SeqLM.from_pretrained(summarizer_name).to(device)
 
     return classifier_tokenizer, classifier_model, summarizer_tokenizer, summarizer_model, device
@@ -77,7 +77,7 @@ classifier_tokenizer, classifier_model, summarizer_tokenizer, summarizer_model, 
 
 # Improved classification function with subtopic prediction
 def classify_text(text):
-    inputs = classifier_tokenizer(text, return_tensors="pt", truncation=True, max_length=512, clean_up_tokenization_spaces=True).to(device)
+    inputs = classifier_tokenizer(text, return_tensors="pt", truncation=True, max_length=512).to(device)
     with torch.no_grad():
         outputs = classifier_model(**inputs)
     probabilities = torch.nn.functional.softmax(outputs.logits, dim=-1)
@@ -96,7 +96,7 @@ def classify_text(text):
 
 # Improved summarization function
 def summarize_text(text, max_length=150):
-    inputs = summarizer_tokenizer(text, return_tensors="pt", truncation=True, max_length=1024, clean_up_tokenization_spaces=True).to(device)
+    inputs = summarizer_tokenizer(text, return_tensors="pt", truncation=True, max_length=1024).to(device)
     with torch.no_grad():
         summary_ids = summarizer_model.generate(inputs["input_ids"], max_length=max_length, min_length=50, length_penalty=2.0, num_beams=4, early_stopping=True)
     summary = summarizer_tokenizer.decode(summary_ids[0], skip_special_tokens=True)
