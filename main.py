@@ -1,11 +1,6 @@
 import streamlit as st
-
 import torch
-    from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
-except ImportError:
-    st.error("Failed to import torch or transformers. Please check your installation.")
-    st.stop()
-
+from transformers import AutoTokenizer, AutoModelForSequenceClassification, AutoModelForSeq2SeqLM
 import pandas as pd
 import sqlite3
 from datetime import datetime, timedelta
@@ -34,32 +29,35 @@ UPSC_TOPICS = {
 }
 
 # Initialize SQLite database
-conn = sqlite3.connect('upsc_news.db')
-c = conn.cursor()
+@st.cache_resource
+def get_database_connection():
+    conn = sqlite3.connect('upsc_news.db', check_same_thread=False)
+    c = conn.cursor()
+    c.executescript('''
+        CREATE TABLE IF NOT EXISTS articles
+        (id INTEGER PRIMARY KEY AUTOINCREMENT,
+         date TEXT,
+         title TEXT,
+         content TEXT,
+         topic TEXT,
+         subtopic TEXT,
+         summary TEXT,
+         sentiment REAL,
+         url TEXT,
+         content_hash TEXT UNIQUE);
+        
+        CREATE INDEX IF NOT EXISTS idx_date ON articles(date);
+        CREATE INDEX IF NOT EXISTS idx_topic ON articles(topic);
+        CREATE INDEX IF NOT EXISTS idx_subtopic ON articles(subtopic);
+        
+        CREATE TABLE IF NOT EXISTS study_progress
+        (date TEXT PRIMARY KEY,
+         hours REAL,
+         streak INTEGER);
+    ''')
+    return conn
 
-# Create tables with proper indexing
-c.executescript('''
-    CREATE TABLE IF NOT EXISTS articles
-    (id INTEGER PRIMARY KEY AUTOINCREMENT,
-     date TEXT,
-     title TEXT,
-     content TEXT,
-     topic TEXT,
-     subtopic TEXT,
-     summary TEXT,
-     sentiment REAL,
-     url TEXT,
-     content_hash TEXT UNIQUE);
-    
-    CREATE INDEX IF NOT EXISTS idx_date ON articles(date);
-    CREATE INDEX IF NOT EXISTS idx_topic ON articles(topic);
-    CREATE INDEX IF NOT EXISTS idx_subtopic ON articles(subtopic);
-    
-    CREATE TABLE IF NOT EXISTS study_progress
-    (date TEXT PRIMARY KEY,
-     hours REAL,
-     streak INTEGER);
-''')
+conn = get_database_connection()
 
 # Load pre-trained models
 @st.cache_resource
@@ -114,9 +112,9 @@ def analyze_sentiment(text):
 def insert_article(date, title, content, topic, subtopic, summary, sentiment, url):
     content_hash = hashlib.md5(content.encode()).hexdigest()
     try:
-        c.execute("INSERT INTO articles (date, title, content, topic, subtopic, summary, sentiment, url, content_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                  (date, title, content, topic, subtopic, summary, sentiment, url, content_hash))
-        conn.commit()
+        with conn:
+            conn.execute("INSERT INTO articles (date, title, content, topic, subtopic, summary, sentiment, url, content_hash) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                         (date, title, content, topic, subtopic, summary, sentiment, url, content_hash))
         return True
     except sqlite3.IntegrityError:
         return False  # Duplicate article
@@ -145,24 +143,22 @@ async def scrape_articles(urls):
 # Function to log study progress
 def log_study_progress(hours):
     today = datetime.now().strftime("%Y-%m-%d")
-    c.execute("SELECT streak FROM study_progress ORDER BY date DESC LIMIT 1")
-    result = c.fetchone()
-    current_streak = result[0] if result else 0
+    with conn:
+        result = conn.execute("SELECT streak FROM study_progress ORDER BY date DESC LIMIT 1").fetchone()
+        current_streak = result[0] if result else 0
 
-    yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
-    c.execute("SELECT date FROM study_progress WHERE date = ?", (yesterday,))
-    if c.fetchone():
-        current_streak += 1
-    else:
-        current_streak = 1
+        yesterday = (datetime.now() - timedelta(days=1)).strftime("%Y-%m-%d")
+        if conn.execute("SELECT date FROM study_progress WHERE date = ?", (yesterday,)).fetchone():
+            current_streak += 1
+        else:
+            current_streak = 1
 
-    c.execute("INSERT OR REPLACE INTO study_progress (date, hours, streak) VALUES (?, ?, ?)", (today, hours, current_streak))
-    conn.commit()
+        conn.execute("INSERT OR REPLACE INTO study_progress (date, hours, streak) VALUES (?, ?, ?)", (today, hours, current_streak))
 
 # Function to get study progress
 def get_study_progress():
-    c.execute("SELECT date, hours, streak FROM study_progress ORDER BY date")
-    return c.fetchall()
+    with conn:
+        return conn.execute("SELECT date, hours, streak FROM study_progress ORDER BY date").fetchall()
 
 # New function to extract text from PDF
 def extract_text_from_pdf(pdf_file):
@@ -282,8 +278,8 @@ def main():
 
         selected_topic = st.selectbox("Select a topic", list(UPSC_TOPICS.keys()))
 
-        c.execute("SELECT title, summary, sentiment FROM articles WHERE topic=? ORDER BY date DESC LIMIT 10", (selected_topic,))
-        articles = c.fetchall()
+        with conn:
+            articles = conn.execute("SELECT title, summary, sentiment FROM articles WHERE topic=? ORDER BY date DESC LIMIT 10", (selected_topic,)).fetchall()
 
         if articles:
             st.subheader(f"Recent Articles on {selected_topic}")
